@@ -1,0 +1,15 @@
+# virtual environment
+venv/
+
+# python cache
+__pycache__/
+*.pyc
+
+# environment variables (API keys)
+.env
+
+# vscode settings
+.vscode/
+
+# mac (just in case someone uses mac)
+.DS_Store
