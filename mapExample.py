@@ -1,11 +1,11 @@
 import random
-
 import flet_map as ftm
-
 import flet as ft
 
 
 def main(page: ft.Page):
+    page.title = "Montclair State University Campus Map"
+
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     circle_layer_ref = ft.Ref[ftm.CircleLayer]()
 
@@ -14,7 +14,8 @@ def main(page: ft.Page):
             marker_layer_ref.current.markers.append(
                 ftm.Marker(
                     content=ft.Icon(
-                        ft.Icons.LOCATION_ON, color=ft.CupertinoColors.DESTRUCTIVE_RED
+                        ft.Icons.LOCATION_ON,
+                        color=ft.CupertinoColors.DESTRUCTIVE_RED,
                     ),
                     coordinates=e.coordinates,
                 )
@@ -32,11 +33,14 @@ def main(page: ft.Page):
         page.update()
 
     page.add(
-        ft.Text("Click anywhere to add a Marker, right-click to add a CircleMarker."),
+        ft.Text(
+            "Montclair State University Campus Map\n"
+            "Click to add a Marker, right-click to add a Circle."
+        ),
         ftm.Map(
             expand=True,
-            initial_center=ftm.MapLatitudeLongitude(15, 10),
-            initial_zoom=4.2,
+            initial_center=ftm.MapLatitudeLongitude(40.862147765671764, -74.1981587142951),
+            initial_zoom=17,
             interaction_configuration=ftm.InteractionConfiguration(
                 flags=ftm.InteractionFlag.ALL
             ),
@@ -48,6 +52,7 @@ def main(page: ft.Page):
                 ftm.TileLayer(
                     url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                     on_image_error=lambda e: print("TileLayer Error"),
+                    user_agent_package_name="red-hawk-navigator",
                 ),
                 ftm.RichAttribution(
                     attributions=[
@@ -59,76 +64,21 @@ def main(page: ft.Page):
                         ),
                         ftm.TextSourceAttribution(
                             text="Flet",
-                            on_click=lambda e: e.page.launch_url("https://flet.dev"),
+                            on_click=lambda e: e.page.launch_url(
+                                "https://flet.dev"
+                            ),
                         ),
                     ]
                 ),
-                ftm.SimpleAttribution(
-                    text="Flet",
-                    alignment=ft.Alignment.TOP_RIGHT,
-                    on_click=lambda e: print("Clicked SimpleAttribution"),
-                ),
+
                 ftm.MarkerLayer(
                     ref=marker_layer_ref,
-                    markers=[
-                        ftm.Marker(
-                            content=ft.Icon(ft.Icons.LOCATION_ON),
-                            coordinates=ftm.MapLatitudeLongitude(30, 15),
-                        ),
-                        ftm.Marker(
-                            content=ft.Icon(ft.Icons.LOCATION_ON),
-                            coordinates=ftm.MapLatitudeLongitude(10, 10),
-                        ),
-                        ftm.Marker(
-                            content=ft.Icon(ft.Icons.LOCATION_ON),
-                            coordinates=ftm.MapLatitudeLongitude(25, 45),
-                        ),
-                    ],
+                    markers=[],
                 ),
+
                 ftm.CircleLayer(
                     ref=circle_layer_ref,
-                    circles=[
-                        ftm.CircleMarker(
-                            radius=10,
-                            coordinates=ftm.MapLatitudeLongitude(16, 24),
-                            color=ft.Colors.RED,
-                            border_color=ft.Colors.BLUE,
-                            border_stroke_width=4,
-                        ),
-                    ],
-                ),
-                ftm.PolygonLayer(
-                    polygons=[
-                        ftm.PolygonMarker(
-                            label="Popular Touristic Area",
-                            label_text_style=ft.TextStyle(
-                                color=ft.Colors.BLACK,
-                                size=15,
-                                weight=ft.FontWeight.BOLD,
-                            ),
-                            color=ft.Colors.with_opacity(0.3, ft.Colors.BLUE),
-                            coordinates=[
-                                ftm.MapLatitudeLongitude(10, 10),
-                                ftm.MapLatitudeLongitude(30, 15),
-                                ftm.MapLatitudeLongitude(25, 45),
-                            ],
-                        ),
-                    ],
-                ),
-                ftm.PolylineLayer(
-                    polylines=[
-                        ftm.PolylineMarker(
-                            border_stroke_width=3,
-                            border_color=ft.Colors.RED,
-                            gradient_colors=[ft.Colors.BLACK, ft.Colors.BLACK],
-                            color=ft.Colors.with_opacity(0.6, ft.Colors.GREEN),
-                            coordinates=[
-                                ftm.MapLatitudeLongitude(10, 10),
-                                ftm.MapLatitudeLongitude(30, 15),
-                                ftm.MapLatitudeLongitude(25, 45),
-                            ],
-                        ),
-                    ],
+                    circles=[],
                 ),
             ],
         ),
