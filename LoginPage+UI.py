@@ -239,7 +239,7 @@ def main(page: ft.Page):
         )
 
         password = ft.TextField(
-            label="Password (optional)",
+            label="Password",
             password=True,
             can_reveal_password=True,
             prefix_icon=ft.Icons.LOCK_OUTLINE,
@@ -297,5 +297,4 @@ def main(page: ft.Page):
     show_login()
 
 
-if __name__ == "__main__":
-    ft.app(target=main, view=ft.AppView.FLET_APP)
+ft.run(main)

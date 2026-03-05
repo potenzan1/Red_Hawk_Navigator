@@ -24,7 +24,7 @@ async def get_route(start, end):
     return [ftm.MapLatitudeLongitude(lat, lon) for lon, lat in coords]
 
 async def main(page: ft.Page):
-    page.title = "Montclair State University Walking Router"
+    page.title = "Red Hawk Navigator"
 
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     polyline_layer_ref = ft.Ref[ftm.PolylineLayer]()
@@ -89,10 +89,34 @@ async def main(page: ft.Page):
                         ftm.TextSourceAttribution(text="Flet"),
                     ]
                 ),
-                ftm.MarkerLayer(ref=marker_layer_ref, markers=[]),
-                ftm.PolylineLayer(ref=polyline_layer_ref, polylines=[]),
+                ftm.MarkerLayer(
+                    ref=marker_layer_ref, 
+                    markers=[]
+                    ),
+
+                ftm.PolylineLayer(
+                    ref=polyline_layer_ref, 
+                    polylines=[]
+                    ),
+
+                ftm.PolygonLayer(
+                    polygons=[
+                        ftm.PolygonMarker(
+                            coordinates=[
+                                ftm.MapLatitudeLongitude(40.862223, -74.197025),
+                                ftm.MapLatitudeLongitude(40.861815, -74.197181),
+                                ftm.MapLatitudeLongitude(40.861702, -74.196883),
+                                ftm.MapLatitudeLongitude(40.862124, -74.196642),
+                            ],
+                            color=ft.Colors.with_opacity(0.4, ft.Colors.BLUE),
+                            border_color=ft.Colors.BLUE,
+                            border_stroke_width=3,
+                            label="Center for Computing and Information Science"
+                        )
+                    ]
+                ),
             ],
         ),
     )
 
-ft.app(target=main)
+ft.run(main)
