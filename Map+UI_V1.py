@@ -1,33 +1,49 @@
 import flet as ft
 import flet_map as ftm
+import flet_geolocator as ftg
 import httpx
-import mysql.connector
+# import mysql.connector
+
 
 MSU_DOMAIN = "@montclair.edu"
 GRAPH_HOPPER_API_KEY = "3e19284a-10f0-424f-9add-57bd72967758"
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="MSU_Admin",
-    password="MSU",
-    database="red_hawk_navigation"
-)
+db = None
+# MySQL is temporarily disabled until backend setup is ready.
+# if mysql.connector is not None:
+#     try:
+#         db = mysql.connector.connect(
+#             host="localhost",
+#             user="MSU_Admin",
+#             password="MSU",
+#             database="red_hawk_navigation",
+#         )
+#     except Exception as e:
+#         print("Database connection error:", e)
+#         db = None
 
 def user_auth(email: str, password: str) -> bool:
-    try:
-        cursor = db.cursor(dictionary=True)
+    # MySQL auth is disabled for now; use local demo fallback.
+    return (email or "").strip().lower().endswith(MSU_DOMAIN) and bool((password or "").strip())
 
-        query = "SELECT * FROM user WHERE email = %s AND password = %s"
-        cursor.execute(query, (email, password))
-        user = cursor.fetchone()
-
-        cursor.close()
-
-        return user is not None
-    
-    except Exception as e:
-        print("Database error:", e)
-        return False
+    # if db is None:
+    #     # Demo fallback: allows app usage when MySQL module/server is unavailable.
+    #     return (email or "").strip().lower().endswith(MSU_DOMAIN) and bool((password or "").strip())
+    #
+    # try:
+    #     cursor = db.cursor(dictionary=True)
+    #
+    #     query = "SELECT * FROM user WHERE email = %s AND password = %s"
+    #     cursor.execute(query, (email, password))
+    #     user = cursor.fetchone()
+    #
+    #     cursor.close()
+    #
+    #     return user is not None
+    #
+    # except Exception as e:
+    #     print("Database error:", e)
+    #     return False
 
 async def get_route(start, end):
     url = "https://graphhopper.com/api/1/route"
@@ -78,7 +94,9 @@ async def main(page: ft.Page):
     selected_points = []
 
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
+    user_marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     polyline_layer_ref = ft.Ref[ftm.PolylineLayer]()
+    user_location = None
 
     map_style = "standard"
     walking_mode = True
@@ -115,9 +133,53 @@ async def main(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
+    def handle_geo_error(e):
+        show_snack(f"Location error: {e.data}")
+
+    geo = ftg.Geolocator(
+        configuration=ftg.GeolocatorConfiguration(
+            accuracy=ftg.GeolocatorPositionAccuracy.BEST
+        ),
+        on_error=handle_geo_error,
+    )
+
     def show_screen(content):
         main_area.content = content
         page.update()
+
+    async def load_user_location_and_refresh_home(show_feedback: bool = False):
+        nonlocal user_location
+        pos = None
+        try:
+            pos = await geo.get_current_position()
+        except Exception:
+            pass
+
+        if pos is None:
+            try:
+                await geo.request_permission(timeout=30)
+                pos = await geo.get_current_position()
+            except Exception:
+                pos = None
+
+        if pos is None:
+            try:
+                pos = await geo.get_last_known_position()
+            except Exception:
+                pos = None
+
+        if pos is not None:
+            user_location = ftm.MapLatitudeLongitude(pos.latitude, pos.longitude)
+            selected_points.clear()
+            selected_points.append(user_location)
+            show_home_page()
+            if show_feedback:
+                show_snack(f"My location: {pos.latitude:.5f}, {pos.longitude:.5f}")
+        elif show_feedback:
+            show_snack("Could not get your location.")
+
+    def recenter_to_my_location(_):
+        page.run_task(load_user_location_and_refresh_home, True)
 
     def app_shell(content):
         return ft.Container(
@@ -223,11 +285,15 @@ async def main(page: ft.Page):
         if polyline_layer_ref.current:
             polyline_layer_ref.current.polylines.clear()
         selected_points.clear()
+        if user_location is not None:
+            selected_points.append(user_location)
 
     def clear_markers():
         if marker_layer_ref.current:
             marker_layer_ref.current.markers.clear()
         selected_points.clear()
+        if user_location is not None:
+            selected_points.append(user_location)
 
     def get_tile_layer():
         return ftm.TileLayer(
@@ -256,6 +322,9 @@ async def main(page: ft.Page):
             )
         )
 
+        if user_location is not None and len(selected_points) == 0:
+            selected_points.append(user_location)
+
         selected_points.append(e.coordinates)
 
         if len(selected_points) == 2:
@@ -277,6 +346,8 @@ async def main(page: ft.Page):
                 show_snack(f"Routing error: {ex}")
 
             selected_points.clear()
+            if user_location is not None:
+                selected_points.append(user_location)
 
         page.update()
 
@@ -323,6 +394,7 @@ async def main(page: ft.Page):
                 error_text.visible = False
                 current_user_email = entered_email
                 show_home_page()
+                page.run_task(load_user_location_and_refresh_home, False)
             else:
                 error_text.value = "invalid email or password"
                 error_text.visible = True
@@ -493,7 +565,9 @@ async def main(page: ft.Page):
 
         map_view = ftm.Map(
             expand=True,
-            initial_center=ftm.MapLatitudeLongitude(
+            initial_center=user_location
+            if user_location is not None
+            else ftm.MapLatitudeLongitude(
                 40.862147765671764,
                 -74.1981587142951,
             ),
@@ -511,9 +585,36 @@ async def main(page: ft.Page):
                         ftm.TextSourceAttribution(text="Flet"),
                     ]
                 ),
+                ftm.MarkerLayer(
+                    ref=user_marker_layer_ref,
+                    markers=[
+                        ftm.Marker(
+                            coordinates=user_location,
+                            content=ft.Icon(
+                                ft.Icons.MY_LOCATION,
+                                color="#1E88E5",
+                                size=30,
+                            ),
+                        )
+                    ]
+                    if user_location is not None
+                    else [],
+                ),
                 ftm.MarkerLayer(ref=marker_layer_ref, markers=[]),
                 ftm.PolylineLayer(ref=polyline_layer_ref, polylines=[]),
             ],
+        )
+
+        my_location_fab = ft.Container(
+            width=44,
+            height=44,
+            border_radius=22,
+            bgcolor=WHITE,
+            border=ft.Border.all(1, BORDER),
+            alignment=ft.Alignment(0, 0),
+            ink=True,
+            on_click=recenter_to_my_location,
+            content=ft.Icon(ft.Icons.MY_LOCATION, color="#2D5E93", size=22),
         )
 
         body = ft.Column(
@@ -527,7 +628,21 @@ async def main(page: ft.Page):
                 ),
                 route_hint,
                 top_actions,
-                ft.Container(expand=True, content=map_view),
+                ft.Container(
+                    expand=True,
+                    padding=ft.Padding(left=0, top=0, right=12, bottom=12),
+                    content=ft.Stack(
+                        expand=True,
+                        controls=[
+                            map_view,
+                            ft.Container(
+                                right=12,
+                                bottom=12,
+                                content=my_location_fab,
+                            ),
+                        ],
+                    ),
+                ),
                 build_bottom_nav("home"),
             ],
         )
@@ -820,8 +935,8 @@ async def main(page: ft.Page):
         show_screen(app_shell(body))
 
     page.add(main_area)
+    page.services.append(geo)
     show_login()
-
 
 if __name__ == "__main__":
     ft.run(main)
