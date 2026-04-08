@@ -1,12 +1,33 @@
 import flet as ft
 import flet_map as ftm
 import httpx
-import sqlite3
+import mysql.connector
 
 MSU_DOMAIN = "@montclair.edu"
 GRAPH_HOPPER_API_KEY = "3e19284a-10f0-424f-9add-57bd72967758"
 
-DatabaseConnection =  sqlite3.connect('')
+db = mysql.connector.connect(
+    host="localhost",
+    user="MSU_Admin",
+    password="MSU",
+    database="red_hawk_navigation"
+)
+
+def user_auth(email: str, password: str) -> bool:
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        query = "SELECT * FROM user WHERE email = %s AND password = %s"
+        cursor.execute(query, (email, password))
+        user = cursor.fetchone()
+
+        cursor.close()
+
+        return user is not None
+    
+    except Exception as e:
+        print("Database error:", e)
+        return False
 
 async def get_route(start, end):
     url = "https://graphhopper.com/api/1/route"
@@ -284,16 +305,29 @@ async def main(page: ft.Page):
         def do_login(_):
             nonlocal current_user_email
             entered_email = (email_field.value or "").strip()
+            entered_password = (password_field.value or "").strip()
 
             if not email_ok(entered_email):
                 error_text.value = "Please enter a valid @montclair.edu email."
                 error_text.visible = True
                 page.update()
                 return
-
-            error_text.visible = False
-            current_user_email = entered_email
-            show_home_page()
+            
+            if not entered_password:
+                error_text.value = "Password cannot be empty"
+                error_text.visible = True
+                page.update()
+                return
+            
+            if user_auth(entered_email, entered_password):
+                error_text.visible = False
+                current_user_email = entered_email
+                show_home_page()
+            else:
+                error_text.value = "invalid email or password"
+                error_text.visible = True
+            
+            page.update()
 
         login_card = ft.Container(
             width=340,
