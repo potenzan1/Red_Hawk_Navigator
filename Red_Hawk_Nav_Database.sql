@@ -61,7 +61,7 @@ CREATE TABLE `user` (
 
 INSERT INTO `user` (`email`, `password`, `role`, `userID`) VALUES
 ('faculty@montclair.edu', 'test', 1, 5),
-('student@motnclair.edu', 'test', 0, 6);
+('student@montclair.edu', 'test', 0, 6);
 
 --
 -- Indexes for dumped tables
