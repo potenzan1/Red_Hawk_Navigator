@@ -1,14 +1,12 @@
-import os
-import sqlite3
 from datetime import datetime
 
 import flet as ft
 import flet_geolocator as ftg
 import flet_map as ftm
 import httpx
+import mysql.connector
 
 GRAPH_HOPPER_API_KEY = "3e19284a-10f0-424f-9add-57bd72967758"
-DB_PATH = os.path.join(os.path.dirname(__file__), "red_hawk_navigation.db")
 DEFAULT_CENTER = ftm.MapLatitudeLongitude(40.862147765671764, -74.1981587142951)
 DEFAULT_ZOOM = 17
 
@@ -55,123 +53,70 @@ CAMPUS_LOCATIONS = {
     },
 }
 
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_database():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS event (
-            eventID INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            location TEXT NOT NULL,
-            date TEXT NOT NULL,
-            time TEXT NOT NULL,
-            description TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Pending'
-        )
-        """
+def get_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="red_hawk_navigation",
     )
-
-    columns = [row[1] for row in cursor.execute("PRAGMA table_info(event)").fetchall()]
-    if "status" not in columns:
-        cursor.execute("ALTER TABLE event ADD COLUMN status TEXT NOT NULL DEFAULT 'Pending'")
-
-    # Remove your example/test event if it exists
-    cursor.execute("DELETE FROM event WHERE title = ?", ("hjhljj",))
-
-    event_count = cursor.execute("SELECT COUNT(*) FROM event").fetchone()[0]
-    if event_count == 0:
-        cursor.executemany(
-            """
-            INSERT INTO event (title, location, date, time, description, status)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    "Spring Career Fair",
-                    "Student Center",
-                    "2026-04-25",
-                    "13:00",
-                    "Meet employers and explore internship opportunities.",
-                    "",
-                ),
-                (
-                    "Red Hawk Game Night",
-                    "Campus Recreation Center",
-                    "2026-04-27",
-                    "18:30",
-                    "Join other students for games and activities.",
-                    "",
-                ),
-                (
-                    "Club Expo",
-                    "University Hall",
-                    "2026-04-29",
-                    "12:00",
-                    "Discover clubs and student organizations.",
-                    "",
-                ),
-            ],
-        )
-
-    conn.commit()
-    conn.close()
-
 
 def username_ok(value):
     value = (value or "").strip().lower()
     return value.endswith("@montclair.edu") and " " not in value and len(value) > len("@montclair.edu")
 
-
-def detect_role(username):
-    username = (username or "").strip().lower()
-    if not username.endswith("@montclair.edu"):
-        return "Faculty"
-    local_part = username.split("@")[0]
-    if any(ch.isdigit() for ch in local_part):
-        return "Student"
-    return "Faculty"
-
-
 def user_auth(username, password):
-    username = (username or "").strip()
+    username = (username or "").strip().lower()
     password = (password or "").strip()
-    return username_ok(username) and password == "test"
 
+    if not username_ok(username) or not password:
+        return None
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT email, password, role FROM user WHERE email = %s AND password = %s",
+        (username, password),
+    )
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not user:
+        return None
+
+    role_value = user.get("role", 0)
+    role_name = "Faculty" if int(role_value) == 1 else "Student"
+    return {"email": user["email"], "role": role_name}
 
 def get_events():
-    conn = get_db_connection()
-    rows = conn.execute(
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
         """
         SELECT eventID, title, location, date, time, description, status
         FROM event
         ORDER BY date ASC, time ASC, eventID DESC
         """
-    ).fetchall()
+    )
+    rows = cursor.fetchall()
+    cursor.close()
     conn.close()
-    return [dict(row) for row in rows]
-
+    return rows
 
 def add_event(title, location, date_value, time_value, description, status="Pending"):
-    conn = get_db_connection()
-    conn.execute(
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
         """
         INSERT INTO event (title, location, date, time, description, status)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """,
         (title, location, date_value, time_value, description, status),
     )
     conn.commit()
+    cursor.close()
     conn.close()
-
 
 async def get_route(start, end):
     params = {
@@ -193,7 +138,6 @@ async def get_route(start, end):
 
     coords = data["paths"][0]["points"]["coordinates"]
     return [ftm.MapLatitudeLongitude(lat, lon) for lon, lat in coords]
-
 
 async def geocode_location(query):
     q = (query or "").strip().lower()
@@ -238,16 +182,12 @@ async def geocode_location(query):
     except Exception:
         return None
 
-
 async def main(page: ft.Page):
-    init_database()
-
     page.title = "Red Hawk Navigator"
     page.padding = 0
     page.spacing = 0
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = ft.Theme(color_scheme_seed="#C8102E")
-    page.dark_theme = ft.Theme(color_scheme_seed="#C8102E")
 
     try:
         page.window_width = 390
@@ -263,12 +203,8 @@ async def main(page: ft.Page):
     MUTED = "#666666"
     LIGHT_BG = "#F5F5F5"
     LIGHT_BORDER = "#E3E3E3"
-    PAGE_BG_LIGHT = "#F7F7F7"
-    PAGE_BG_DARK = "#121212"
-    CARD_DARK = "#1E1E1E"
-    TEXT_DARK = "#F5F5F5"
-    SUBTEXT_DARK = "#B4B4B4"
-    BORDER_DARK = "#2E2E2E"
+    PAGE_BG = "#F7F7F7"
+    APP_SHELL = "#D9D9D9"
 
     main_area = ft.Container(expand=True)
 
@@ -279,9 +215,6 @@ async def main(page: ft.Page):
     current_center = DEFAULT_CENTER
     current_zoom = DEFAULT_ZOOM
     map_refresh_token = 0
-
-    current_theme_mode = ft.ThemeMode.LIGHT
-    show_precise_location = False
     current_location_status = "Location not loaded yet."
 
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
@@ -303,35 +236,17 @@ async def main(page: ft.Page):
         expand=True,
     )
 
-    def is_dark():
-        return current_theme_mode == ft.ThemeMode.DARK
-
     def colors():
-        if is_dark():
-            return {
-                "page_bg": PAGE_BG_DARK,
-                "card_bg": CARD_DARK,
-                "text": TEXT_DARK,
-                "subtext": SUBTEXT_DARK,
-                "border": BORDER_DARK,
-                "surface": "#1A1A1A",
-                "soft_tint": "#2A1A1D",
-                "app_shell": "#0E0E0E",
-            }
         return {
-            "page_bg": PAGE_BG_LIGHT,
+            "page_bg": PAGE_BG,
             "card_bg": WHITE,
             "text": BLACK,
             "subtext": MUTED,
             "border": LIGHT_BORDER,
             "surface": WHITE,
             "soft_tint": RED_TINT,
-            "app_shell": "#D9D9D9",
+            "app_shell": APP_SHELL,
         }
-
-    def apply_theme():
-        page.theme_mode = current_theme_mode
-        page.update()
 
     def show_snack(message):
         page.snack_bar = ft.SnackBar(content=ft.Text(message))
@@ -492,11 +407,7 @@ async def main(page: ft.Page):
             return
 
         user_location = ftm.MapLatitudeLongitude(pos.latitude, pos.longitude)
-
-        if show_precise_location:
-            current_location_status = f"Current location: {pos.latitude:.5f}, {pos.longitude:.5f}"
-        else:
-            current_location_status = "Your location is active for navigation."
+        current_location_status = "Your location is active for navigation."
 
         if recenter:
             set_map_view(user_location, 18)
@@ -534,18 +445,36 @@ async def main(page: ft.Page):
         await draw_route_to(e.coordinates, "selected point")
 
     def format_event_date(date_value):
+        if isinstance(date_value, datetime):
+            return date_value.strftime("%b %d, %Y")
         try:
-            return datetime.strptime(date_value, "%Y-%m-%d").strftime("%b %d, %Y")
+            return datetime.strptime(str(date_value), "%Y-%m-%d").strftime("%b %d, %Y")
         except Exception:
-            return date_value
+            return str(date_value)
 
     def format_event_time(time_value):
-        for fmt in ("%H:%M", "%H:%M:%S"):
+        value = str(time_value).split(".")[0]
+        for fmt in ("%H:%M:%S", "%H:%M"):
             try:
-                return datetime.strptime(time_value, fmt).strftime("%I:%M %p").lstrip("0")
+                return datetime.strptime(value, fmt).strftime("%I:%M %p").lstrip("0")
             except Exception:
                 continue
-        return time_value
+        return str(time_value)
+
+    def normalize_time(value):
+        value = (value or "").strip()
+
+        try:
+            return datetime.strptime(value, "%H:%M").strftime("%H:%M:%S")
+        except ValueError:
+            pass
+
+        try:
+            return datetime.strptime(value.upper(), "%I:%M %p").strftime("%H:%M:%S")
+        except ValueError:
+            pass
+
+        return None
 
     def show_login():
         email_field = ft.TextField(
@@ -583,23 +512,16 @@ async def main(page: ft.Page):
         def do_login(_):
             nonlocal current_user_name, current_user_role
 
-            entered_username = (email_field.value or "").strip().lower()
-            entered_password = (password_field.value or "").strip()
+            result = user_auth(email_field.value, password_field.value)
 
-            if not username_ok(entered_username):
-                error_text.value = "Use your @montclair.edu email."
+            if not result:
+                error_text.value = "Invalid email or password."
                 error_text.visible = True
                 page.update()
                 return
 
-            if not user_auth(entered_username, entered_password):
-                error_text.value = "Invalid login."
-                error_text.visible = True
-                page.update()
-                return
-
-            current_user_name = entered_username
-            current_user_role = detect_role(entered_username)
+            current_user_name = result["email"]
+            current_user_role = result["role"]
             error_text.visible = False
             search_field.value = ""
             set_map_view(DEFAULT_CENTER, DEFAULT_ZOOM)
@@ -784,7 +706,7 @@ async def main(page: ft.Page):
 
         content = ft.Container(
             expand=True,
-            bgcolor="#E9E9E9" if not is_dark() else c["app_shell"],
+            bgcolor="#E9E9E9",
             alignment=ft.Alignment(0, 0),
             content=ft.Container(
                 width=390,
@@ -854,7 +776,7 @@ async def main(page: ft.Page):
                         width=38,
                         height=38,
                         border_radius=11,
-                        bgcolor=RED_TINT if not is_dark() else "#2A1A1D",
+                        bgcolor=RED_TINT,
                         alignment=ft.Alignment(0, 0),
                         content=ft.IconButton(
                             icon=ft.Icons.SEARCH,
@@ -1051,7 +973,7 @@ async def main(page: ft.Page):
             controls=[
                 ft.Container(
                     padding=20,
-                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])),
+                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])) ,
                     bgcolor=c["surface"],
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -1097,44 +1019,48 @@ async def main(page: ft.Page):
 
         title_field = ft.TextField(
             label="Event title",
-            border_radius=12,
+            border_radius=16,
             focused_border_color=MSU_RED,
             filled=True,
             bgcolor=c["card_bg"],
             color=c["text"],
         )
+
         location_field = ft.TextField(
             label="Location",
-            border_radius=12,
+            border_radius=16,
             focused_border_color=MSU_RED,
             filled=True,
             bgcolor=c["card_bg"],
             color=c["text"],
         )
+
         date_field = ft.TextField(
             label="Date",
             hint_text="YYYY-MM-DD",
-            border_radius=12,
+            border_radius=16,
             focused_border_color=MSU_RED,
             filled=True,
             bgcolor=c["card_bg"],
             color=c["text"],
         )
+
         time_field = ft.TextField(
             label="Time",
-            hint_text="HH:MM",
-            border_radius=12,
+            hint_text="9:00 AM or 13:00",
+            border_radius=16,
             focused_border_color=MSU_RED,
             filled=True,
             bgcolor=c["card_bg"],
             color=c["text"],
         )
+
         details_field = ft.TextField(
             label="Details",
             multiline=True,
-            min_lines=3,
-            max_lines=5,
-            border_radius=12,
+            min_lines=4,
+            max_lines=6,
+            border_radius=16,
             focused_border_color=MSU_RED,
             filled=True,
             bgcolor=c["card_bg"],
@@ -1145,23 +1071,30 @@ async def main(page: ft.Page):
             title = (title_field.value or "").strip()
             location = (location_field.value or "").strip()
             date_value = (date_field.value or "").strip()
-            time_value = (time_field.value or "").strip()
+            raw_time_value = (time_field.value or "").strip()
             details = (details_field.value or "").strip() or "No details added."
 
-            if not title or not location or not date_value or not time_value:
+            if not title or not location or not date_value or not raw_time_value:
                 show_snack("Please fill in title, location, date, and time.")
                 return
 
             try:
                 datetime.strptime(date_value, "%Y-%m-%d")
-                datetime.strptime(time_value, "%H:%M")
             except ValueError:
-                show_snack("Use date as YYYY-MM-DD and time as HH:MM.")
+                show_snack("Use date as YYYY-MM-DD.")
                 return
 
-            add_event(title, location, date_value, time_value, details, "Pending")
-            show_events_page()
-            show_snack("Event submitted and marked as Pending.")
+            time_value = normalize_time(raw_time_value)
+            if time_value is None:
+                show_snack("Use time like 9:00 AM or 13:00.")
+                return
+
+            try:
+                add_event(title, location, date_value, time_value, details, "Pending")
+                show_events_page()
+                show_snack("Event submitted and marked as Pending.")
+            except mysql.connector.Error as ex:
+                show_snack(f"Could not save event: {ex}")
 
         body = ft.Column(
             expand=True,
@@ -1170,7 +1103,7 @@ async def main(page: ft.Page):
                 ft.Container(
                     padding=20,
                     bgcolor=c["surface"],
-                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])),
+                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])) ,
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
@@ -1215,17 +1148,6 @@ async def main(page: ft.Page):
             ],
         )
         show_screen(app_shell(body))
-
-    def toggle_theme(_=None):
-        nonlocal current_theme_mode
-        current_theme_mode = ft.ThemeMode.DARK if current_theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
-        apply_theme()
-        show_settings_page()
-
-    def toggle_precise_location(e):
-        nonlocal show_precise_location
-        show_precise_location = e.control.value
-        show_settings_page()
 
     def show_settings_page():
         c = colors()
@@ -1310,7 +1232,7 @@ async def main(page: ft.Page):
             padding=18,
             border_radius=22,
             bgcolor=c["soft_tint"],
-            border=ft.Border.all(1, "#F3D9DF" if not is_dark() else "#503038"),
+            border=ft.Border.all(1, "#F3D9DF"),
             content=ft.Row(
                 spacing=14,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1346,28 +1268,6 @@ async def main(page: ft.Page):
                         ],
                     ),
                 ],
-            ),
-        )
-
-        appearance_row = settings_row(
-            ft.Icons.DARK_MODE_OUTLINED if not is_dark() else ft.Icons.LIGHT_MODE_OUTLINED,
-            "Appearance",
-            "Switch between light mode and dark mode.",
-            trailing=ft.Switch(
-                value=is_dark(),
-                active_color=MSU_RED,
-                on_change=lambda e: toggle_theme(),
-            ),
-        )
-
-        privacy_row = settings_row(
-            ft.Icons.MY_LOCATION,
-            "Show exact coordinates",
-            "Turn on only if you want precise coordinates visible.",
-            trailing=ft.Switch(
-                value=show_precise_location,
-                active_color=MSU_RED,
-                on_change=toggle_precise_location,
             ),
         )
 
@@ -1419,8 +1319,6 @@ async def main(page: ft.Page):
                         spacing=16,
                         controls=[
                             profile_card,
-                            appearance_row,
-                            privacy_row,
                             location_row,
                             help_row,
                             map_row,
@@ -1430,7 +1328,7 @@ async def main(page: ft.Page):
                                 "Sign Out",
                                 height=52,
                                 style=ft.ButtonStyle(
-                                    bgcolor="#111111" if not is_dark() else MSU_RED,
+                                    bgcolor="#111111",
                                     color=WHITE,
                                     shape=ft.RoundedRectangleBorder(radius=14),
                                     text_style=ft.TextStyle(
@@ -1451,9 +1349,7 @@ async def main(page: ft.Page):
 
     page.add(main_area)
     page.services.append(geo)
-    apply_theme()
     show_login()
-
 
 if __name__ == "__main__":
     ft.run(main)
