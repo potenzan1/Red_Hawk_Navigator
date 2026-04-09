@@ -82,6 +82,40 @@ async def main(page: ft.Page):
 
     current_user_email = ""
     selected_points = []
+    # --- BUILDING DATA ---
+    buildings = [
+    {
+        "name": "Student Center",
+        "lat": 40.86248,
+        "lon": -74.19818,
+        "info": "Main student hub with dining, lounges, and event spaces.",
+        "hours": "8:00 AM – 10:00 PM"
+    },
+    {
+        "name": "Schmitt Hall",
+        "lat": 40.86188,
+        "lon": -74.19755,
+        "info": "Academic building with classrooms and faculty offices.",
+        "hours": "7:30 AM – 9:00 PM"
+    },
+    {
+        "name": "Sprague Library",
+        "lat": 40.86130,
+        "lon": -74.19870,
+        "info": "Primary campus library with study spaces and resources.",
+        "hours": "24 Hours"
+    },
+    {
+        "name": "University Hall",
+        "lat": 40.86325,
+        "lon": -74.1970,
+        "info": "Administrative offices and lecture halls.",
+        "hours": "8:30 AM – 5:00 PM"
+    },
+]
+
+# active building popup
+    active_building_popup = ft.Ref[ft.Container]()
 
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     user_marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
@@ -185,6 +219,12 @@ async def main(page: ft.Page):
                 content=content,
             ),
         )
+    
+    def find_nearest_building(lat, lon, threshold=0.00015):
+        for b in buildings:
+            if abs(b["lat"] - lat) < threshold and abs(b["lon"] - lon) < threshold:
+                return b
+        return None
 
     def build_header(title: str, subtitle: str | None = None, trailing=None):
         subtitle_control = (
@@ -293,6 +333,7 @@ async def main(page: ft.Page):
 
     async def handle_map_tap(e: ftm.MapTapEvent):
         if e.name != "tap":
+            
             return
 
         if not show_markers:
@@ -339,6 +380,20 @@ async def main(page: ft.Page):
             if user_location is not None:
                 selected_points.append(user_location)
 
+        page.update()
+
+    def show_building_popup(building):
+        if active_building_popup.current is None:
+            return
+
+        active_building_popup.current.content = ft.Column(
+            controls=[
+                ft.Text(building["name"], weight=ft.FontWeight.W_700),
+                ft.Text(building["info"], size=12),
+                ft.Text(f"Hours: {building['hours']}", size=11, color="gray"),
+            ]
+        )
+        active_building_popup.current.visible = True
         page.update()
 
     def show_login():
@@ -390,6 +445,13 @@ async def main(page: ft.Page):
                 error_text.visible = True
             
             page.update()
+=======
+                               
+            error_text.visible = False
+            current_user_email = entered_email
+         
+            show_home_page()
+>>>>>>> 3199783 (updated map Ui and building search)
 
         login_card = ft.Container(
             width=340,
@@ -552,6 +614,17 @@ async def main(page: ft.Page):
                 ],
             ),
         )
+        building_popup = ft.Container(
+            ref=active_building_popup,
+            visible=False,
+            bgcolor=WHITE,
+            border=ft.Border.all(1, BORDER),
+            border_radius=14,
+            padding=12,
+            right=10,
+            top=10,
+            width=250,
+        )
 
         map_view = ftm.Map(
             expand=True,
@@ -568,6 +641,25 @@ async def main(page: ft.Page):
             on_tap=handle_map_tap,
             layers=[
                 get_tile_layer(),
+                ftm.MarkerLayer(
+                    markers=[
+                        ftm.Marker(
+                            coordinates=ftm.MapLatitudeLongitude(b["lat"], b["lon"]),
+                            content=ft.Container(
+                                width=80,
+                                height=80,
+                                alignment=ft.Alignment(0, 0),   # 👈 ADD THIS LINE
+                                content=ft.Container(   # 👈 visible center dot                                        width=12,
+                                    height=12,
+                                    border_radius=6,
+                                    bgcolor=MSU_RED,
+                                ),
+                                on_click=lambda e, b=b: show_building_popup(b),
+                        ),
+                    )
+                for b in buildings
+        ],
+    ),
                 ftm.RichAttribution(
                     attributions=[
                         ftm.TextSourceAttribution(text="OpenStreetMap Contributors"),
@@ -618,6 +710,7 @@ async def main(page: ft.Page):
                 ),
                 route_hint,
                 top_actions,
+<<<<<<< HEAD
                 ft.Container(
                     expand=True,
                     padding=ft.Padding(left=0, top=0, right=12, bottom=12),
@@ -632,6 +725,14 @@ async def main(page: ft.Page):
                             ),
                         ],
                     ),
+=======
+                ft.Stack(
+                    expand=True,
+                    controls=[
+                        map_view,
+                        building_popup,
+                    ],
+>>>>>>> 3199783 (updated map Ui and building search)
                 ),
                 build_bottom_nav("home"),
             ],

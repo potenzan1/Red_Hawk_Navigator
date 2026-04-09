@@ -2,6 +2,25 @@ import flet as ft
 
 MSU_DOMAIN = "@montclair.edu"
 
+# -------- NEW: Building Data --------
+buildings_data = [
+    {
+        "name": "University Hall",
+        "hours": "8:00 AM - 10:00 PM",
+        "description": "Main academic building with classrooms and offices.",
+    },
+    {
+        "name": "Student Center",
+        "hours": "7:00 AM - 11:00 PM",
+        "description": "Dining, lounges, and student services.",
+    },
+    {
+        "name": "Sprague Library",
+        "hours": "8:00 AM - 12:00 AM",
+        "description": "Main campus library with study spaces.",
+    },
+]
+
 
 def main(page: ft.Page):
     # ---- Mobile app window ----
@@ -36,7 +55,6 @@ def main(page: ft.Page):
         page.update()
 
     def app_header(title: str, subtitle: str | None = None):
-        # Custom app-bar style header (safe for your Flet version)
         return ft.Container(
             bgcolor=bg,
             padding=ft.Padding(left=18, right=18, top=16, bottom=10),
@@ -50,7 +68,6 @@ def main(page: ft.Page):
         )
 
     def centered_card(content_controls):
-        # Keeps every screen consistent & mobile-friendly
         card = ft.Container(
             width=360,
             bgcolor=card_bg,
@@ -66,7 +83,6 @@ def main(page: ft.Page):
         )
 
     def show_screen(header_control, body_control):
-        # Wrap body in scroll so small screens never overflow
         main_area.content = ft.Column(
             expand=True,
             spacing=0,
@@ -76,6 +92,40 @@ def main(page: ft.Page):
             ],
         )
         page.update()
+
+    # -------- NEW: Buildings Page --------
+    def show_buildings_page(user_email: str):
+        def back(_):
+            show_dashboard(user_email)
+
+        header = app_header("Campus Buildings", f"Signed in as: {user_email}")
+
+        def building_card(b):
+            return ft.Container(
+                bgcolor=card_bg,
+                border=ft.border.all(1, border),
+                border_radius=16,
+                padding=14,
+                content=ft.Column(
+                    spacing=6,
+                    controls=[
+                        ft.Text(b["name"], size=16, weight=ft.FontWeight.W_800),
+                        ft.Text(f"Hours: {b['hours']}", size=12, color=text_muted),
+                        ft.Text(b["description"], size=12),
+                    ],
+                ),
+            )
+
+        cards = [building_card(b) for b in buildings_data]
+
+        body_ui = centered_card(
+            cards + [
+                ft.Divider(height=8, color="transparent"),
+                ft.OutlinedButton("Back to Dashboard", on_click=back),
+            ]
+        )
+
+        show_screen(header, body_ui)
 
     # -------- Feature page template --------
     def show_feature_page(user_email: str, title: str, body: str):
@@ -125,14 +175,13 @@ def main(page: ft.Page):
 
         header = app_header("Red Hawk Navigator", f"Signed in as: {user_email}")
 
-        # Tile style (tap-friendly)
         def tile(title: str, subtitle: str, icon, on_open):
             return ft.Container(
                 bgcolor=card_bg,
                 border=ft.border.all(1, border),
                 border_radius=16,
                 padding=14,
-                ink=True,  # gives tap ripple on supported views
+                ink=True,
                 on_click=lambda e: on_open(),
                 content=ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -150,7 +199,6 @@ def main(page: ft.Page):
                 ),
             )
 
-        # Dashboard body (also centered)
         dashboard_card = ft.Container(
             width=360,
             bgcolor=bg,
@@ -172,12 +220,7 @@ def main(page: ft.Page):
                         "Building Information",
                         "Hours, offices, and departments",
                         ft.Icons.APARTMENT_OUTLINED,
-                        lambda: show_feature_page(
-                            user_email,
-                            "Building Information",
-                            "This is the Building Information placeholder.\n\n"
-                            "Next step: build a list of buildings with details (hours, description, and location).",
-                        ),
+                        lambda: show_buildings_page(user_email),
                     ),
                     tile(
                         "Events",
@@ -219,7 +262,6 @@ def main(page: ft.Page):
     def show_login():
         header = app_header("Red Hawk Navigator", "Student project demo — not an official MSU login.")
 
-        # MSU branding area (inside card)
         branding = ft.Column(
             spacing=2,
             controls=[
@@ -258,7 +300,6 @@ def main(page: ft.Page):
                 page.update()
                 return
 
-            # success -> dashboard
             email_error.visible = False
             show_dashboard(email.value.strip())
 
@@ -292,7 +333,6 @@ def main(page: ft.Page):
 
         show_screen(header, body_ui)
 
-    # Mount app
     page.add(main_area)
     show_login()
 
