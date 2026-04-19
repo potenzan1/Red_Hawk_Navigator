@@ -14,42 +14,74 @@ CAMPUS_LOCATIONS = {
     "cs building": {
         "label": "Center for Computing and Information Science",
         "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "info": "Computer science classes, labs, and faculty offices.",
+        "hours": "8:00 AM - 10:00 PM",
     },
     "center for computing and information science": {
         "label": "Center for Computing and Information Science",
         "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "info": "Computer science classes, labs, and faculty offices.",
+        "hours": "8:00 AM - 10:00 PM",
     },
     "ccis": {
         "label": "Center for Computing and Information Science",
         "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "info": "Computer science classes, labs, and faculty offices.",
+        "hours": "8:00 AM - 10:00 PM",
     },
     "student center": {
         "label": "Student Center",
         "coordinates": ftm.MapLatitudeLongitude(40.86272, -74.19710),
+        "info": "Dining, study areas, student lounges, and events.",
+        "hours": "8:00 AM - 10:00 PM",
     },
     "university hall": {
         "label": "University Hall",
         "coordinates": ftm.MapLatitudeLongitude(40.86162, -74.19946),
+        "info": "Administrative offices and classrooms.",
+        "hours": "8:30 AM - 6:00 PM",
     },
     "dickson hall": {
         "label": "Dickson Hall",
         "coordinates": ftm.MapLatitudeLongitude(40.86062, -74.19866),
+        "info": "Lecture halls and academic departments.",
+        "hours": "8:00 AM - 9:00 PM",
     },
     "feliciano school of business": {
         "label": "Feliciano School of Business",
         "coordinates": ftm.MapLatitudeLongitude(40.86020, -74.20045),
+        "info": "Business school classrooms, labs, and offices.",
+        "hours": "8:00 AM - 9:00 PM",
     },
     "schmitt hall": {
         "label": "Schmitt Hall",
         "coordinates": ftm.MapLatitudeLongitude(40.86028, -74.19678),
+        "info": "Classrooms and faculty offices.",
+        "hours": "8:00 AM - 9:00 PM",
     },
     "sprague library": {
         "label": "Sprague Library",
         "coordinates": ftm.MapLatitudeLongitude(40.85895, -74.19735),
+        "info": "Main campus library with study spaces and resources.",
+        "hours": "7:00 AM - 12:00 AM",
+    },
+    "richardson hall": {
+    "label": "Richardson Hall",
+    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+    "info": "Academic building with classrooms and faculty offices.",
+    "hours": "8:00 AM - 9:00 PM",
+    },
+    "richardson": {
+    "label": "Richardson Hall",
+    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+    "info": "Academic building with classrooms and faculty offices.",
+    "hours": "8:00 AM - 9:00 PM",
     },
     "finley hall": {
         "label": "Finley Hall",
         "coordinates": ftm.MapLatitudeLongitude(40.85965, -74.19685),
+        "info": "Lecture halls and classrooms.",
+        "hours": "8:00 AM - 9:00 PM",
     },
 }
 
@@ -149,6 +181,8 @@ async def geocode_location(query):
         return {
             "label": place["label"],
             "coordinates": place["coordinates"],
+            "info": place.get("info", "No information available."),
+            "hours": place.get("hours", "Hours not available."),
         }
 
     for key, value in CAMPUS_LOCATIONS.items():
@@ -156,6 +190,8 @@ async def geocode_location(query):
             return {
                 "label": value["label"],
                 "coordinates": value["coordinates"],
+                "info": value.get("info", "No information available."),
+                "hours": value.get("hours", "Hours not available."),
             }
 
     params = {
@@ -212,6 +248,7 @@ async def main(page: ft.Page):
     current_user_role = ""
     user_location = None
     active_destination = None
+    selected_building = None
     current_center = DEFAULT_CENTER
     current_zoom = DEFAULT_ZOOM
     map_refresh_token = 0
@@ -420,6 +457,7 @@ async def main(page: ft.Page):
             show_snack(current_location_status)
 
     async def perform_search(_=None):
+        nonlocal selected_building
         query = (search_field.value or "").strip()
         if not query:
             show_snack("Enter a building or place to search.")
@@ -429,6 +467,7 @@ async def main(page: ft.Page):
         if result is None:
             show_snack("Location not found.")
             return
+        selected_building = result
 
         await draw_route_to(result["coordinates"], result["label"])
         show_home_page()
@@ -756,6 +795,44 @@ async def main(page: ft.Page):
 
     def show_home_page():
         c = colors()
+        building_info_card = (
+            ft.Container(
+                bgcolor=c["surface"],
+                border_radius=16,
+                border=ft.Border.all(1, c["border"]),
+                padding=12,
+                margin=ft.Margin.only(left=14, right=14, top=8, bottom=8),
+                shadow=ft.BoxShadow(
+                    blur_radius=8,
+                    spread_radius=0,
+                    color="#10000000",
+                    offset=ft.Offset(0, 2),
+                ),
+                content=ft.Column(
+                    spacing=4,
+                    controls=[
+                        ft.Text(
+                            selected_building["label"],
+                            size=14,
+                            weight=ft.FontWeight.W_700,
+                            color=c["text"],
+                        ),
+                        ft.Text(
+                    selected_building.get("info", ""),
+                    size=12,
+                    color=c["subtext"],
+                ),
+                ft.Text(
+                    f"Hours: {selected_building.get('hours', '')}",
+                    size=11,
+                    color=MSU_RED,
+                ),
+            ],
+        ),
+    )
+    if selected_building is not None and "info" in selected_building
+    else ft.Container()
+)
 
         search_bar = ft.Container(
             bgcolor=c["surface"],
@@ -867,6 +944,7 @@ async def main(page: ft.Page):
                         ],
                     ),
                 ),
+                building_info_card,
                 build_bottom_nav("home"),
             ],
         )
