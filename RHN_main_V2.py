@@ -66,16 +66,16 @@ CAMPUS_LOCATIONS = {
         "hours": "7:00 AM - 12:00 AM",
     },
     "richardson hall": {
-    "label": "Richardson Hall",
-    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
-    "info": "Academic building with classrooms and faculty offices.",
-    "hours": "8:00 AM - 9:00 PM",
+        "label": "Richardson Hall",
+        "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+        "info": "Academic building with classrooms and faculty offices.",
+        "hours": "8:00 AM - 9:00 PM",
     },
     "richardson": {
-    "label": "Richardson Hall",
-    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
-    "info": "Academic building with classrooms and faculty offices.",
-    "hours": "8:00 AM - 9:00 PM",
+        "label": "Richardson Hall",
+        "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+        "info": "Academic building with classrooms and faculty offices.",
+        "hours": "8:00 AM - 9:00 PM",
     },
     "finley hall": {
         "label": "Finley Hall",
@@ -93,9 +93,11 @@ def get_connection():
         database="red_hawk_navigation",
     )
 
+
 def username_ok(value):
     value = (value or "").strip().lower()
     return value.endswith("@montclair.edu") and " " not in value and len(value) > len("@montclair.edu")
+
 
 def user_auth(username, password):
     username = (username or "").strip().lower()
@@ -121,6 +123,7 @@ def user_auth(username, password):
     role_name = "Faculty" if int(role_value) == 1 else "Student"
     return {"email": user["email"], "role": role_name}
 
+
 def get_events():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -136,6 +139,7 @@ def get_events():
     conn.close()
     return rows
 
+
 def add_event(title, location, date_value, time_value, description, status="Pending"):
     conn = get_connection()
     cursor = conn.cursor()
@@ -149,6 +153,7 @@ def add_event(title, location, date_value, time_value, description, status="Pend
     conn.commit()
     cursor.close()
     conn.close()
+
 
 async def get_route(start, end):
     params = {
@@ -171,6 +176,7 @@ async def get_route(start, end):
     coords = data["paths"][0]["points"]["coordinates"]
     return [ftm.MapLatitudeLongitude(lat, lon) for lon, lat in coords]
 
+
 async def geocode_location(query):
     q = (query or "").strip().lower()
     if not q:
@@ -183,6 +189,7 @@ async def geocode_location(query):
             "coordinates": place["coordinates"],
             "info": place.get("info", "No information available."),
             "hours": place.get("hours", "Hours not available."),
+            "source": "campus",
         }
 
     for key, value in CAMPUS_LOCATIONS.items():
@@ -192,6 +199,7 @@ async def geocode_location(query):
                 "coordinates": value["coordinates"],
                 "info": value.get("info", "No information available."),
                 "hours": value.get("hours", "Hours not available."),
+                "source": "campus",
             }
 
     params = {
@@ -203,7 +211,10 @@ async def geocode_location(query):
 
     try:
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
-            response = await client.get("https://nominatim.openstreetmap.org/search", params=params)
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -214,9 +225,13 @@ async def geocode_location(query):
         return {
             "label": item.get("display_name", query),
             "coordinates": ftm.MapLatitudeLongitude(float(item["lat"]), float(item["lon"])),
+            "info": "Location found from map search.",
+            "hours": "Hours not available.",
+            "source": "external",
         }
     except Exception:
         return None
+
 
 async def main(page: ft.Page):
     page.title = "Red Hawk Navigator"
@@ -237,18 +252,22 @@ async def main(page: ft.Page):
     BLACK = "#111111"
     WHITE = "#FFFFFF"
     MUTED = "#666666"
-    LIGHT_BG = "#F5F5F5"
     LIGHT_BORDER = "#E3E3E3"
     PAGE_BG = "#F7F7F7"
     APP_SHELL = "#D9D9D9"
+
+    SUGGESTION_ROW_HEIGHT = 50
+    SUGGESTION_NO_RESULTS_HEIGHT = 52
+    SUGGESTION_BOX_PADDING = 12
+    SUGGESTION_BOX_MAX_HEIGHT = 240
 
     main_area = ft.Container(expand=True)
 
     current_user_name = ""
     current_user_role = ""
     user_location = None
+    selected_place = None
     active_destination = None
-    selected_building = None
     current_center = DEFAULT_CENTER
     current_zoom = DEFAULT_ZOOM
     map_refresh_token = 0
@@ -257,20 +276,40 @@ async def main(page: ft.Page):
     marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     user_marker_layer_ref = ft.Ref[ftm.MarkerLayer]()
     polyline_layer_ref = ft.Ref[ftm.PolylineLayer]()
+    user_badge_ref = ft.Ref[ft.Container]()
+    clear_search_button_ref = ft.Ref[ft.IconButton]()
+
+    suggestion_column = ft.Column(spacing=0, tight=True, scroll=ft.ScrollMode.AUTO)
+
+    suggestion_box = ft.Container(
+        visible=False,
+        bgcolor=WHITE,
+        border_radius=18,
+        border=ft.Border.all(1, LIGHT_BORDER),
+        margin=ft.Margin.only(top=8),
+        padding=ft.Padding(0, 6, 0, 6),
+        height=0,
+        shadow=ft.BoxShadow(
+            blur_radius=14,
+            spread_radius=0,
+            color="#18000000",
+            offset=ft.Offset(0, 4),
+        ),
+        content=suggestion_column,
+    )
 
     search_field = ft.TextField(
-        hint_text="Search a campus building",
-        border_radius=14,
-        filled=True,
-        bgcolor=LIGHT_BG,
-        border_color="transparent",
-        focused_border_color="transparent",
-        text_size=13,
-        height=42,
+        hint_text="Search campus building",
+        border=ft.InputBorder.NONE,
+        filled=False,
+        text_size=14,
+        height=34,
         dense=True,
-        content_padding=ft.Padding(10, 6, 10, 6),
-        prefix_icon=ft.Icons.SEARCH,
         expand=True,
+        content_padding=ft.Padding(0, 0, 0, 0),
+        cursor_color=MSU_RED,
+        color=BLACK,
+        hint_style=ft.TextStyle(color="#777777", size=14),
     )
 
     def colors():
@@ -289,6 +328,52 @@ async def main(page: ft.Page):
         page.snack_bar = ft.SnackBar(content=ft.Text(message))
         page.snack_bar.open = True
         page.update()
+
+    def set_badge_visible(visible: bool):
+        if user_badge_ref.current:
+            user_badge_ref.current.visible = visible
+
+    def refresh_clear_button():
+        if clear_search_button_ref.current:
+            clear_search_button_ref.current.visible = bool((search_field.value or "").strip())
+
+    def set_suggestion_box_height(item_count: int, no_results: bool = False):
+        if item_count <= 0:
+            suggestion_box.height = 0
+            return
+        if no_results:
+            desired = SUGGESTION_NO_RESULTS_HEIGHT + SUGGESTION_BOX_PADDING
+        else:
+            desired = (item_count * SUGGESTION_ROW_HEIGHT) + SUGGESTION_BOX_PADDING
+        suggestion_box.height = min(desired, SUGGESTION_BOX_MAX_HEIGHT)
+
+    def get_suggestion_labels(query: str):
+        q = (query or "").strip().lower()
+        if not q:
+            return []
+
+        exact = []
+        starts = []
+        contains = []
+        seen = set()
+
+        def add_label(label, bucket):
+            key = label.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                bucket.append(label.strip())
+
+        for key, value in CAMPUS_LOCATIONS.items():
+            label = value["label"]
+            searchable = {key.lower(), label.lower()}
+            if any(q == item for item in searchable):
+                add_label(label, exact)
+            elif any(item.startswith(q) for item in searchable):
+                add_label(label, starts)
+            elif any(q in item for item in searchable):
+                add_label(label, contains)
+
+        return (exact + starts + contains)[:6]
 
     def handle_geo_error(e):
         nonlocal current_location_status
@@ -367,22 +452,34 @@ async def main(page: ft.Page):
         current_zoom = zoom
         map_refresh_token += 1
 
-    def clear_route_and_pins():
+    def clear_route():
         nonlocal active_destination
         active_destination = None
-        if marker_layer_ref.current:
-            marker_layer_ref.current.markers.clear()
         if polyline_layer_ref.current:
             polyline_layer_ref.current.polylines.clear()
 
-    async def draw_route_to(destination, label=None):
-        nonlocal active_destination
-        if marker_layer_ref.current is None or polyline_layer_ref.current is None:
+    def clear_pin():
+        if marker_layer_ref.current:
+            marker_layer_ref.current.markers.clear()
+
+    def clear_selection():
+        nonlocal selected_place, active_destination
+        selected_place = None
+        active_destination = None
+        clear_route()
+        clear_pin()
+
+    def hide_suggestions():
+        suggestion_column.controls.clear()
+        suggestion_box.visible = False
+        suggestion_box.height = 0
+        set_badge_visible(True)
+        refresh_clear_button()
+
+    def drop_pin(destination):
+        if marker_layer_ref.current is None:
             return
-
         marker_layer_ref.current.markers.clear()
-        polyline_layer_ref.current.polylines.clear()
-
         marker_layer_ref.current.markers.append(
             ftm.Marker(
                 coordinates=destination,
@@ -390,14 +487,25 @@ async def main(page: ft.Page):
             )
         )
 
-        active_destination = destination
-        set_map_view(destination)
+    async def route_to_selected_place():
+        nonlocal active_destination
+        if selected_place is None:
+            show_snack("Select a place first.")
+            return
 
         if user_location is None:
-            page.update()
-            if label:
-                show_snack(f"Centered on {label}.")
+            await load_user_location(show_feedback=False, recenter=False)
+
+        if user_location is None:
+            show_snack("Current location unavailable. Please enable location.")
             return
+
+        if polyline_layer_ref.current is None:
+            return
+
+        destination = selected_place["coordinates"]
+        active_destination = destination
+        polyline_layer_ref.current.polylines.clear()
 
         try:
             route_points = await get_route(user_location, destination)
@@ -408,12 +516,12 @@ async def main(page: ft.Page):
                     stroke_width=5,
                 )
             )
-            page.update()
-            if label:
-                show_snack(f"Route loaded to {label}.")
+            set_map_view(destination, 18)
+            show_home_page()
+            show_snack(f"Directions loaded to {selected_place['label']}.")
         except Exception as ex:
             page.update()
-            show_snack(f"Could not load route: {ex}")
+            show_snack(f"Could not load directions: {ex}")
 
     async def load_user_location(show_feedback=False, recenter=True):
         nonlocal user_location, current_location_status
@@ -450,38 +558,134 @@ async def main(page: ft.Page):
             set_map_view(user_location, 18)
             show_home_page()
 
-        if active_destination is not None:
-            await draw_route_to(active_destination)
-
         if show_feedback:
             show_snack(current_location_status)
 
-    async def perform_search(_=None):
-        nonlocal selected_building
-        query = (search_field.value or "").strip()
-        if not query:
-            show_snack("Enter a building or place to search.")
-            return
+    async def select_place(place):
+        nonlocal selected_place
+        selected_place = place
+        clear_route()
+        drop_pin(place["coordinates"])
+        set_map_view(place["coordinates"], 18)
+        hide_suggestions()
+        show_home_page()
 
-        result = await geocode_location(query)
+    async def choose_suggestion(label):
+        search_field.value = label
+        refresh_clear_button()
+        result = await geocode_location(label)
         if result is None:
             show_snack("Location not found.")
             return
-        selected_building = result
+        await select_place(result)
 
-        await draw_route_to(result["coordinates"], result["label"])
-        show_home_page()
+    def clear_search(_=None):
+        search_field.value = ""
+        hide_suggestions()
+        refresh_clear_button()
+        page.update()
+
+    def build_no_results_item():
+        return ft.Container(
+            height=SUGGESTION_NO_RESULTS_HEIGHT,
+            padding=ft.Padding(16, 12, 16, 12),
+            alignment=ft.Alignment(-1, 0),
+            content=ft.Text("No results found", size=14, color=MUTED),
+        )
+
+    def build_suggestion_item(name):
+        return ft.Container(
+            height=SUGGESTION_ROW_HEIGHT,
+            alignment=ft.Alignment(-1, 0),
+            content=ft.TextButton(
+                content=ft.Text(
+                    name,
+                    size=14,
+                    color=BLACK,
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+                on_click=lambda e, label=name: page.run_task(choose_suggestion, label),
+                style=ft.ButtonStyle(
+                    alignment=ft.Alignment(-1, 0),
+                    padding=ft.Padding(16, 10, 16, 10),
+                    shape=ft.RoundedRectangleBorder(radius=10),
+                    overlay_color="#10C8102E",
+                ),
+            ),
+        )
+
+    def update_suggestions(e):
+        query = (e.control.value or "").strip()
+        refresh_clear_button()
+
+        if not query:
+            hide_suggestions()
+            page.update()
+            return
+
+        matches = get_suggestion_labels(query)
+        suggestion_column.controls.clear()
+
+        if matches:
+            for name in matches:
+                suggestion_column.controls.append(build_suggestion_item(name))
+            set_suggestion_box_height(len(matches), no_results=False)
+        else:
+            suggestion_column.controls.append(build_no_results_item())
+            set_suggestion_box_height(1, no_results=True)
+
+        suggestion_box.visible = True
+        set_badge_visible(False)
+        page.update()
+
+    async def perform_search(_=None):
+        query = (search_field.value or "").strip()
+        if not query:
+            hide_suggestions()
+            page.update()
+            show_snack("Enter a building or place to search.")
+            return
+
+        hide_suggestions()
+        result = await geocode_location(query)
+        if result is None:
+            page.update()
+            show_snack("Location not found.")
+            return
+        await select_place(result)
+
+    search_field.on_change = update_suggestions
+    search_field.on_submit = lambda e: page.run_task(perform_search)
 
     async def center_to_cs_building(_=None):
         cs = CAMPUS_LOCATIONS["cs building"]
         search_field.value = cs["label"]
-        await draw_route_to(cs["coordinates"], cs["label"])
-        show_home_page()
+        refresh_clear_button()
+        await select_place({
+            "label": cs["label"],
+            "coordinates": cs["coordinates"],
+            "info": cs["info"],
+            "hours": cs["hours"],
+            "source": "campus",
+        })
 
     async def handle_map_tap(e: ftm.MapTapEvent):
         if e.name != "tap":
             return
-        await draw_route_to(e.coordinates, "selected point")
+        hide_suggestions()
+        nonlocal selected_place
+        selected_place = {
+            "label": "Selected point",
+            "coordinates": e.coordinates,
+            "info": "Custom point selected on the map.",
+            "hours": "N/A",
+            "source": "custom",
+        }
+        clear_route()
+        drop_pin(e.coordinates)
+        set_map_view(e.coordinates, 18)
+        show_home_page()
 
     def format_event_date(date_value):
         if isinstance(date_value, datetime):
@@ -502,17 +706,14 @@ async def main(page: ft.Page):
 
     def normalize_time(value):
         value = (value or "").strip()
-
         try:
             return datetime.strptime(value, "%H:%M").strftime("%H:%M:%S")
         except ValueError:
             pass
-
         try:
             return datetime.strptime(value.upper(), "%I:%M %p").strftime("%H:%M:%S")
         except ValueError:
             pass
-
         return None
 
     def show_login():
@@ -550,9 +751,7 @@ async def main(page: ft.Page):
 
         def do_login(_):
             nonlocal current_user_name, current_user_role
-
             result = user_auth(email_field.value, password_field.value)
-
             if not result:
                 error_text.value = "Invalid email or password."
                 error_text.visible = True
@@ -562,7 +761,11 @@ async def main(page: ft.Page):
             current_user_name = result["email"]
             current_user_role = result["role"]
             error_text.visible = False
+
+            clear_selection()
             search_field.value = ""
+            hide_suggestions()
+            refresh_clear_button()
             set_map_view(DEFAULT_CENTER, DEFAULT_ZOOM)
             show_home_page()
             page.run_task(load_user_location, False, False)
@@ -571,18 +774,8 @@ async def main(page: ft.Page):
             spacing=6,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Text(
-                    "MONTCLAIR",
-                    size=32,
-                    weight=ft.FontWeight.W_900,
-                    color=MSU_RED,
-                ),
-                ft.Text(
-                    "STATE UNIVERSITY",
-                    size=13,
-                    weight=ft.FontWeight.W_700,
-                    color=BLACK,
-                ),
+                ft.Text("MONTCLAIR", size=32, weight=ft.FontWeight.W_900, color=MSU_RED),
+                ft.Text("STATE UNIVERSITY", size=13, weight=ft.FontWeight.W_700, color=BLACK),
             ],
         )
 
@@ -601,17 +794,8 @@ async def main(page: ft.Page):
                 spacing=18,
                 controls=[
                     header,
-                    ft.Text(
-                        "Red Hawk Navigator",
-                        size=24,
-                        weight=ft.FontWeight.W_800,
-                        color=BLACK,
-                    ),
-                    ft.Text(
-                        "Student project demo",
-                        size=12,
-                        color="#777777",
-                    ),
+                    ft.Text("Red Hawk Navigator", size=24, weight=ft.FontWeight.W_800, color=BLACK),
+                    ft.Text("Student project demo", size=12, color="#777777"),
                     ft.Container(height=8),
                     email_field,
                     password_field,
@@ -627,10 +811,7 @@ async def main(page: ft.Page):
                                 color=WHITE,
                                 shape=ft.RoundedRectangleBorder(radius=16),
                                 elevation=3,
-                                text_style=ft.TextStyle(
-                                    size=15,
-                                    weight=ft.FontWeight.W_700,
-                                ),
+                                text_style=ft.TextStyle(size=15, weight=ft.FontWeight.W_700),
                             ),
                             on_click=do_login,
                         ),
@@ -640,10 +821,7 @@ async def main(page: ft.Page):
                         on_click=lambda e: show_help_page(),
                         style=ft.ButtonStyle(
                             color="#2D5D95",
-                            text_style=ft.TextStyle(
-                                size=13,
-                                weight=ft.FontWeight.W_600,
-                            ),
+                            text_style=ft.TextStyle(size=13, weight=ft.FontWeight.W_600),
                         ),
                     ),
                 ],
@@ -667,7 +845,6 @@ async def main(page: ft.Page):
 
     def show_help_page():
         c = colors()
-
         body = ft.Column(
             expand=True,
             spacing=0,
@@ -677,17 +854,8 @@ async def main(page: ft.Page):
                     content=ft.Column(
                         spacing=4,
                         controls=[
-                            ft.Text(
-                                "Account Help",
-                                size=24,
-                                weight=ft.FontWeight.W_800,
-                                color=c["text"],
-                            ),
-                            ft.Text(
-                                "Montclair State University",
-                                size=11,
-                                color=c["subtext"],
-                            ),
+                            ft.Text("Account Help", size=24, weight=ft.FontWeight.W_800, color=c["text"]),
+                            ft.Text("Montclair State University", size=11, color=c["subtext"]),
                         ],
                     ),
                 ),
@@ -699,21 +867,12 @@ async def main(page: ft.Page):
                         spacing=22,
                         horizontal_alignment=ft.CrossAxisAlignment.START,
                         controls=[
-                            ft.Text(
-                                "Forgot username or password?",
-                                size=21,
-                                weight=ft.FontWeight.W_800,
-                                color=c["text"],
-                            ),
+                            ft.Text("Forgot username or password?", size=21, weight=ft.FontWeight.W_800, color=c["text"]),
                             ft.Column(
                                 spacing=6,
                                 controls=[
                                     ft.Text("Please contact:", size=14, color=c["text"]),
-                                    ft.Text(
-                                        "netidmanagement@mail.montclair.edu",
-                                        size=14,
-                                        color=c["text"],
-                                    ),
+                                    ft.Text("netidmanagement@mail.montclair.edu", size=14, color=c["text"]),
                                 ],
                             ),
                             ft.Column(
@@ -731,10 +890,7 @@ async def main(page: ft.Page):
                                     side=ft.BorderSide(1, "#8F949C"),
                                     shape=ft.RoundedRectangleBorder(radius=18),
                                     padding=ft.Padding(22, 16, 22, 16),
-                                    text_style=ft.TextStyle(
-                                        size=13,
-                                        weight=ft.FontWeight.W_700,
-                                    ),
+                                    text_style=ft.TextStyle(size=13, weight=ft.FontWeight.W_700),
                                 ),
                             ),
                         ],
@@ -756,7 +912,6 @@ async def main(page: ft.Page):
                 content=body,
             ),
         )
-
         show_screen(content)
 
     def build_map():
@@ -793,82 +948,142 @@ async def main(page: ft.Page):
             ],
         )
 
-    def show_home_page():
-        c = colors()
-        building_info_card = (
-            ft.Container(
-                bgcolor=c["surface"],
-                border_radius=16,
-                border=ft.Border.all(1, c["border"]),
-                padding=12,
-                margin=ft.Margin.only(left=14, right=14, top=8, bottom=8),
-                shadow=ft.BoxShadow(
-                    blur_radius=8,
-                    spread_radius=0,
-                    color="#10000000",
-                    offset=ft.Offset(0, 2),
-                ),
-                content=ft.Column(
-                    spacing=4,
-                    controls=[
-                        ft.Text(
-                            selected_building["label"],
-                            size=14,
-                            weight=ft.FontWeight.W_700,
-                            color=c["text"],
-                        ),
-                        ft.Text(
-                    selected_building.get("info", ""),
-                    size=12,
-                    color=c["subtext"],
-                ),
-                ft.Text(
-                    f"Hours: {selected_building.get('hours', '')}",
-                    size=11,
-                    color=MSU_RED,
-                ),
-            ],
-        ),
-    )
-    if selected_building is not None and "info" in selected_building
-    else ft.Container()
-)
+    def build_place_card(c):
+        if selected_place is None:
+            return ft.Container()
 
-        search_bar = ft.Container(
-            bgcolor=c["surface"],
+        return ft.Container(
+            margin=ft.Margin.only(left=14, right=14, bottom=8),
+            padding=14,
             border_radius=18,
+            bgcolor=c["surface"],
             border=ft.Border.all(1, c["border"]),
-            padding=6,
-            margin=ft.Margin.only(left=14, top=12, right=14, bottom=0),
             shadow=ft.BoxShadow(
                 blur_radius=10,
                 spread_radius=0,
-                color="#14000000",
+                color="#12000000",
                 offset=ft.Offset(0, 3),
             ),
-            content=ft.Row(
+            content=ft.Column(
+                spacing=12,
                 controls=[
-                    search_field,
-                    ft.Container(
-                        width=38,
-                        height=38,
-                        border_radius=11,
-                        bgcolor=RED_TINT,
-                        alignment=ft.Alignment(0, 0),
-                        content=ft.IconButton(
-                            icon=ft.Icons.SEARCH,
-                            icon_color=MSU_RED,
-                            icon_size=20,
-                            on_click=lambda e: page.run_task(perform_search),
-                        ),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                        controls=[
+                            ft.Column(
+                                expand=True,
+                                spacing=4,
+                                controls=[
+                                    ft.Text(
+                                        selected_place["label"],
+                                        size=18,
+                                        weight=ft.FontWeight.W_800,
+                                        color=c["text"],
+                                    ),
+                                    ft.Text(
+                                        selected_place.get("info", "No information available."),
+                                        size=12,
+                                        color=c["subtext"],
+                                    ),
+                                    ft.Text(
+                                        f"Hours: {selected_place.get('hours', 'N/A')}",
+                                        size=11,
+                                        color=MSU_RED,
+                                    ),
+                                ],
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE,
+                                icon_color=c["text"],
+                                on_click=lambda e: [clear_selection(), show_home_page()],
+                            ),
+                        ],
+                    ),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                        controls=[
+                            ft.FilledButton(
+                                "Directions",
+                                icon=ft.Icons.DIRECTIONS_WALK,
+                                style=ft.ButtonStyle(
+                                    bgcolor=MSU_RED,
+                                    color=WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=14),
+                                ),
+                                on_click=lambda e: page.run_task(route_to_selected_place),
+                            ),
+                            ft.OutlinedButton(
+                                "Center",
+                                icon=ft.Icons.MY_LOCATION,
+                                style=ft.ButtonStyle(
+                                    color=MSU_RED,
+                                    side=ft.BorderSide(1, MSU_RED),
+                                    shape=ft.RoundedRectangleBorder(radius=14),
+                                ),
+                                on_click=lambda e: [set_map_view(selected_place["coordinates"], 18), show_home_page()],
+                            ),
+                        ],
                     ),
                 ],
             ),
         )
 
+    def show_home_page():
+        c = colors()
+
+        search_bar = ft.Container(
+            margin=ft.Margin.only(left=14, top=12, right=14, bottom=0),
+            content=ft.Column(
+                spacing=0,
+                controls=[
+                    ft.Container(
+                        height=50,
+                        bgcolor=c["surface"],
+                        border_radius=24,
+                        border=ft.Border.all(1, c["border"]),
+                        padding=ft.Padding(14, 6, 10, 6),
+                        shadow=ft.BoxShadow(
+                            blur_radius=12,
+                            spread_radius=0,
+                            color="#16000000",
+                            offset=ft.Offset(0, 4),
+                        ),
+                        content=ft.Row(
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Icon(ft.Icons.SEARCH, size=22, color="#666666"),
+                                ft.Container(width=6),
+                                search_field,
+                                ft.IconButton(
+                                    ref=clear_search_button_ref,
+                                    icon=ft.Icons.CLOSE,
+                                    icon_color="#888888",
+                                    icon_size=18,
+                                    visible=bool((search_field.value or "").strip()),
+                                    on_click=clear_search,
+                                    style=ft.ButtonStyle(padding=ft.Padding(0, 0, 0, 0)),
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.SEARCH,
+                                    icon_color=MSU_RED,
+                                    icon_size=22,
+                                    on_click=lambda e: page.run_task(perform_search),
+                                    style=ft.ButtonStyle(padding=ft.Padding(0, 0, 0, 0)),
+                                ),
+                            ],
+                        ),
+                    ),
+                    suggestion_box,
+                ],
+            ),
+        )
+
         user_badge = ft.Container(
+            ref=user_badge_ref,
             left=14,
-            top=78,
+            top=100,
+            visible=not suggestion_box.visible,
             content=ft.Container(
                 bgcolor=c["surface"],
                 border_radius=18,
@@ -883,17 +1098,8 @@ async def main(page: ft.Page):
                 content=ft.Column(
                     spacing=2,
                     controls=[
-                        ft.Text(
-                            current_user_name,
-                            size=12,
-                            weight=ft.FontWeight.W_700,
-                            color=c["text"],
-                        ),
-                        ft.Text(
-                            current_user_role,
-                            size=11,
-                            color=MSU_RED,
-                        ),
+                        ft.Text(current_user_name, size=12, weight=ft.FontWeight.W_700, color=c["text"]),
+                        ft.Text(current_user_role, size=11, color=MSU_RED),
                     ],
                 ),
             ),
@@ -923,7 +1129,7 @@ async def main(page: ft.Page):
                     bgcolor=c["surface"],
                     foreground_color=c["text"],
                     mini=True,
-                    on_click=lambda e: [clear_route_and_pins(), show_home_page()],
+                    on_click=lambda e: [clear_selection(), clear_search(), show_home_page()],
                 ),
             ],
         )
@@ -938,16 +1144,17 @@ async def main(page: ft.Page):
                         expand=True,
                         controls=[
                             build_map(),
-                            ft.Container(top=0, left=0, right=0, content=search_bar),
                             user_badge,
+                            ft.Container(top=0, left=0, right=0, content=search_bar),
                             ft.Container(right=14, bottom=20, content=map_controls),
                         ],
                     ),
                 ),
-                building_info_card,
+                build_place_card(c),
                 build_bottom_nav("home"),
             ],
         )
+
         show_screen(app_shell(body))
 
     def show_events_page():
@@ -955,7 +1162,6 @@ async def main(page: ft.Page):
 
         def event_card(event_item):
             status_value = (event_item.get("status") or "").strip().lower()
-
             header_controls = [
                 ft.Text(
                     event_item["title"],
@@ -965,22 +1171,15 @@ async def main(page: ft.Page):
                     expand=True,
                 )
             ]
-
             if status_value == "pending":
                 header_controls.append(
                     ft.Container(
                         padding=ft.Padding(10, 4, 10, 4),
                         border_radius=12,
                         bgcolor="#FFF1F3",
-                        content=ft.Text(
-                            "Pending",
-                            size=11,
-                            weight=ft.FontWeight.W_700,
-                            color=MSU_RED,
-                        ),
+                        content=ft.Text("Pending", size=11, weight=ft.FontWeight.W_700, color=MSU_RED),
                     )
                 )
-
             return ft.Container(
                 border_radius=18,
                 bgcolor=c["card_bg"],
@@ -1026,11 +1225,7 @@ async def main(page: ft.Page):
                                 ),
                             ],
                         ),
-                        ft.Text(
-                            event_item["description"],
-                            size=13,
-                            color=c["subtext"],
-                        ),
+                        ft.Text(event_item["description"], size=13, color=c["subtext"]),
                     ],
                 ),
             )
@@ -1044,14 +1239,13 @@ async def main(page: ft.Page):
         )
 
         cards = [event_card(item) for item in get_events()]
-
         body = ft.Column(
             expand=True,
             spacing=0,
             controls=[
                 ft.Container(
                     padding=20,
-                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])) ,
+                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])),
                     bgcolor=c["surface"],
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -1060,17 +1254,8 @@ async def main(page: ft.Page):
                             ft.Column(
                                 spacing=4,
                                 controls=[
-                                    ft.Text(
-                                        "MSU Events",
-                                        size=22,
-                                        weight=ft.FontWeight.W_800,
-                                        color=c["text"],
-                                    ),
-                                    ft.Text(
-                                        "Campus events",
-                                        size=12,
-                                        color=c["subtext"],
-                                    ),
+                                    ft.Text("MSU Events", size=22, weight=ft.FontWeight.W_800, color=c["text"]),
+                                    ft.Text("Campus events", size=12, color=c["subtext"]),
                                 ],
                             ),
                             add_button,
@@ -1089,61 +1274,15 @@ async def main(page: ft.Page):
                 build_bottom_nav("events"),
             ],
         )
-
         show_screen(app_shell(body))
 
     def show_add_event_page():
         c = colors()
-
-        title_field = ft.TextField(
-            label="Event title",
-            border_radius=16,
-            focused_border_color=MSU_RED,
-            filled=True,
-            bgcolor=c["card_bg"],
-            color=c["text"],
-        )
-
-        location_field = ft.TextField(
-            label="Location",
-            border_radius=16,
-            focused_border_color=MSU_RED,
-            filled=True,
-            bgcolor=c["card_bg"],
-            color=c["text"],
-        )
-
-        date_field = ft.TextField(
-            label="Date",
-            hint_text="YYYY-MM-DD",
-            border_radius=16,
-            focused_border_color=MSU_RED,
-            filled=True,
-            bgcolor=c["card_bg"],
-            color=c["text"],
-        )
-
-        time_field = ft.TextField(
-            label="Time",
-            hint_text="9:00 AM or 13:00",
-            border_radius=16,
-            focused_border_color=MSU_RED,
-            filled=True,
-            bgcolor=c["card_bg"],
-            color=c["text"],
-        )
-
-        details_field = ft.TextField(
-            label="Details",
-            multiline=True,
-            min_lines=4,
-            max_lines=6,
-            border_radius=16,
-            focused_border_color=MSU_RED,
-            filled=True,
-            bgcolor=c["card_bg"],
-            color=c["text"],
-        )
+        title_field = ft.TextField(label="Event title", border_radius=16, focused_border_color=MSU_RED, filled=True, bgcolor=c["card_bg"], color=c["text"])
+        location_field = ft.TextField(label="Location", border_radius=16, focused_border_color=MSU_RED, filled=True, bgcolor=c["card_bg"], color=c["text"])
+        date_field = ft.TextField(label="Date", hint_text="YYYY-MM-DD", border_radius=16, focused_border_color=MSU_RED, filled=True, bgcolor=c["card_bg"], color=c["text"])
+        time_field = ft.TextField(label="Time", hint_text="9:00 AM or 13:00", border_radius=16, focused_border_color=MSU_RED, filled=True, bgcolor=c["card_bg"], color=c["text"])
+        details_field = ft.TextField(label="Details", multiline=True, min_lines=4, max_lines=6, border_radius=16, focused_border_color=MSU_RED, filled=True, bgcolor=c["card_bg"], color=c["text"])
 
         def save_event(_):
             title = (title_field.value or "").strip()
@@ -1155,7 +1294,6 @@ async def main(page: ft.Page):
             if not title or not location or not date_value or not raw_time_value:
                 show_snack("Please fill in title, location, date, and time.")
                 return
-
             try:
                 datetime.strptime(date_value, "%Y-%m-%d")
             except ValueError:
@@ -1181,20 +1319,12 @@ async def main(page: ft.Page):
                 ft.Container(
                     padding=20,
                     bgcolor=c["surface"],
-                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])) ,
+                    border=ft.Border.only(bottom=ft.BorderSide(1, c["border"])),
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
-                            ft.Text(
-                                "Add Event",
-                                size=22,
-                                weight=ft.FontWeight.W_800,
-                                color=c["text"],
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.CLOSE,
-                                on_click=lambda e: show_events_page(),
-                            ),
+                            ft.Text("Add Event", size=22, weight=ft.FontWeight.W_800, color=c["text"]),
+                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: show_events_page()),
                         ],
                     ),
                 ),
@@ -1253,17 +1383,8 @@ async def main(page: ft.Page):
                             expand=True,
                             spacing=4,
                             controls=[
-                                ft.Text(
-                                    title,
-                                    size=16,
-                                    weight=ft.FontWeight.W_700,
-                                    color=c["text"],
-                                ),
-                                ft.Text(
-                                    subtitle or "",
-                                    size=12,
-                                    color=c["subtext"],
-                                ),
+                                ft.Text(title, size=16, weight=ft.FontWeight.W_700, color=c["text"]),
+                                ft.Text(subtitle or "", size=12, color=c["subtext"]),
                             ],
                         ),
                         trailing if trailing else ft.Icon(ft.Icons.CHEVRON_RIGHT, color=c["subtext"]),
@@ -1278,8 +1399,8 @@ async def main(page: ft.Page):
             user_location = None
             active_destination = None
             current_location_status = "Location not loaded yet."
-            clear_route_and_pins()
-            search_field.value = ""
+            clear_selection()
+            clear_search()
             set_map_view(DEFAULT_CENTER, DEFAULT_ZOOM)
             show_login()
 
@@ -1289,17 +1410,8 @@ async def main(page: ft.Page):
             content=ft.Column(
                 spacing=4,
                 controls=[
-                    ft.Text(
-                        "Settings",
-                        size=24,
-                        weight=ft.FontWeight.W_800,
-                        color=c["text"],
-                    ),
-                    ft.Text(
-                        "Manage your account and app preferences",
-                        size=12,
-                        color=c["subtext"],
-                    ),
+                    ft.Text("Settings", size=24, weight=ft.FontWeight.W_800, color=c["text"]),
+                    ft.Text("Manage your account and app preferences", size=12, color=c["subtext"]),
                 ],
             ),
         )
@@ -1332,17 +1444,8 @@ async def main(page: ft.Page):
                         expand=True,
                         spacing=4,
                         controls=[
-                            ft.Text(
-                                current_user_name or "Not signed in",
-                                size=16,
-                                weight=ft.FontWeight.W_700,
-                                color=c["text"],
-                            ),
-                            ft.Text(
-                                current_user_role or "Unknown role",
-                                size=13,
-                                color=MSU_RED,
-                            ),
+                            ft.Text(current_user_name or "Not signed in", size=16, weight=ft.FontWeight.W_700, color=c["text"]),
+                            ft.Text(current_user_role or "Unknown role", size=13, color=MSU_RED),
                         ],
                     ),
                 ],
@@ -1353,10 +1456,7 @@ async def main(page: ft.Page):
             ft.Icons.GPS_FIXED,
             "Location status",
             current_location_status,
-            trailing=ft.TextButton(
-                "Refresh",
-                on_click=lambda e: page.run_task(load_user_location, True, False),
-            ),
+            trailing=ft.TextButton("Refresh", on_click=lambda e: page.run_task(load_user_location, True, False)),
         )
 
         help_row = settings_row(
@@ -1377,10 +1477,7 @@ async def main(page: ft.Page):
             ft.Icons.ROUTE_OUTLINED,
             "Clear current route",
             "Remove the active destination and route line.",
-            trailing=ft.TextButton(
-                "Clear",
-                on_click=lambda e: [clear_route_and_pins(), show_settings_page()],
-            ),
+            trailing=ft.TextButton("Clear", on_click=lambda e: [clear_selection(), clear_search(), show_settings_page()]),
         )
 
         body = ft.Column(
@@ -1409,10 +1506,7 @@ async def main(page: ft.Page):
                                     bgcolor="#111111",
                                     color=WHITE,
                                     shape=ft.RoundedRectangleBorder(radius=14),
-                                    text_style=ft.TextStyle(
-                                        size=16,
-                                        weight=ft.FontWeight.W_700,
-                                    ),
+                                    text_style=ft.TextStyle(size=16, weight=ft.FontWeight.W_700),
                                 ),
                                 on_click=sign_out,
                             ),
@@ -1422,12 +1516,12 @@ async def main(page: ft.Page):
                 build_bottom_nav("settings"),
             ],
         )
-
         show_screen(app_shell(body))
 
     page.add(main_area)
     page.services.append(geo)
     show_login()
+
 
 if __name__ == "__main__":
     ft.run(main)
