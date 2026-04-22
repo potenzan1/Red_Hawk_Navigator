@@ -10,76 +10,78 @@ GRAPH_HOPPER_API_KEY = "3e19284a-10f0-424f-9add-57bd72967758"
 DEFAULT_CENTER = ftm.MapLatitudeLongitude(40.862147765671764, -74.1981587142951)
 DEFAULT_ZOOM = 17
 
+# FOR MORE LOCATIONS:
+# Go to Map_Nav and place marker on building to get lat and long
 CAMPUS_LOCATIONS = {
     "cs building": {
         "label": "Center for Computing and Information Science",
-        "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "coordinates": ftm.MapLatitudeLongitude(40.861983, -74.196905),
         "info": "Computer science classes, labs, and faculty offices.",
         "hours": "8:00 AM - 10:00 PM",
     },
     "center for computing and information science": {
         "label": "Center for Computing and Information Science",
-        "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "coordinates": ftm.MapLatitudeLongitude(40.861983, -74.196905),
         "info": "Computer science classes, labs, and faculty offices.",
         "hours": "8:00 AM - 10:00 PM",
     },
     "ccis": {
         "label": "Center for Computing and Information Science",
-        "coordinates": ftm.MapLatitudeLongitude(40.86332, -74.19735),
+        "coordinates": ftm.MapLatitudeLongitude(40.861983, -74.196905),
         "info": "Computer science classes, labs, and faculty offices.",
         "hours": "8:00 AM - 10:00 PM",
     },
     "student center": {
         "label": "Student Center",
-        "coordinates": ftm.MapLatitudeLongitude(40.86272, -74.19710),
+        "coordinates": ftm.MapLatitudeLongitude(40.862775, -74.197206),
         "info": "Dining, study areas, student lounges, and events.",
         "hours": "8:00 AM - 10:00 PM",
     },
     "university hall": {
         "label": "University Hall",
-        "coordinates": ftm.MapLatitudeLongitude(40.86162, -74.19946),
+        "coordinates": ftm.MapLatitudeLongitude(40.862435, -74.199034),
         "info": "Administrative offices and classrooms.",
         "hours": "8:30 AM - 6:00 PM",
     },
     "dickson hall": {
         "label": "Dickson Hall",
-        "coordinates": ftm.MapLatitudeLongitude(40.86062, -74.19866),
+        "coordinates": ftm.MapLatitudeLongitude(40.861141, -74.199041),
         "info": "Lecture halls and academic departments.",
         "hours": "8:00 AM - 9:00 PM",
     },
     "feliciano school of business": {
         "label": "Feliciano School of Business",
-        "coordinates": ftm.MapLatitudeLongitude(40.86020, -74.20045),
+        "coordinates": ftm.MapLatitudeLongitude(40.861808, -74.199822),
         "info": "Business school classrooms, labs, and offices.",
         "hours": "8:00 AM - 9:00 PM",
     },
     "schmitt hall": {
         "label": "Schmitt Hall",
-        "coordinates": ftm.MapLatitudeLongitude(40.86028, -74.19678),
+        "coordinates": ftm.MapLatitudeLongitude(40.861434, -74.197225),
         "info": "Classrooms and faculty offices.",
         "hours": "8:00 AM - 9:00 PM",
     },
     "sprague library": {
         "label": "Sprague Library",
-        "coordinates": ftm.MapLatitudeLongitude(40.85895, -74.19735),
+        "coordinates": ftm.MapLatitudeLongitude(40.860372, -74.198110),
         "info": "Main campus library with study spaces and resources.",
         "hours": "7:00 AM - 12:00 AM",
     },
     "richardson hall": {
     "label": "Richardson Hall",
-    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+    "coordinates": ftm.MapLatitudeLongitude(40.862398, -74.196191),
     "info": "Academic building with classrooms and faculty offices.",
     "hours": "8:00 AM - 9:00 PM",
     },
     "richardson": {
     "label": "Richardson Hall",
-    "coordinates": ftm.MapLatitudeLongitude(40.86088, -74.19610),
+    "coordinates": ftm.MapLatitudeLongitude(40.862398, -74.196191),
     "info": "Academic building with classrooms and faculty offices.",
     "hours": "8:00 AM - 9:00 PM",
     },
     "finley hall": {
         "label": "Finley Hall",
-        "coordinates": ftm.MapLatitudeLongitude(40.85965, -74.19685),
+        "coordinates": ftm.MapLatitudeLongitude(40.860977, -74.197651),
         "info": "Lecture halls and classrooms.",
         "hours": "8:00 AM - 9:00 PM",
     },

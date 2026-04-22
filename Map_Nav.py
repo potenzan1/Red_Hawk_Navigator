@@ -33,6 +33,9 @@ async def main(page: ft.Page):
 
     async def handle_tap(e: ftm.MapTapEvent):
         if e.name == "tap":
+            
+            print(f"Lat: {e.coordinates.latitude:.6f}, Lon: {e.coordinates.longitude:.6f}")
+            
             marker_layer_ref.current.markers.append(
                 ftm.Marker(
                     content=ft.Icon(ft.Icons.LOCATION_ON, color=ft.Colors.RED),
