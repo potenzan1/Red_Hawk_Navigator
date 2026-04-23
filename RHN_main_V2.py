@@ -112,33 +112,6 @@ CAMPUS_LOCATIONS = {
     },
 }
 
-DEMO_EVENTS = [
-    {
-        "title": "World's Fair Day",
-        "location": "Student Center",
-        "date": None,
-        "time": "12:00:00",
-        "description": "Campus celebration event.",
-        "status": "Approved",
-    },
-    {
-        "title": "Career Fair",
-        "location": "University Hall",
-        "date": "2028-04-07",
-        "time": "01:54:00",
-        "description": "Meet employers and explore opportunities.",
-        "status": "Approved",
-    },
-    {
-        "title": "Club Expo",
-        "location": "Student Center",
-        "date": "2024-04-07",
-        "time": "01:54:00",
-        "description": "Discover student organizations.",
-        "status": "Approved",
-    },
-]
-
 ALIAS_TO_LABEL = {}
 LABEL_TO_PLACE = {}
 
