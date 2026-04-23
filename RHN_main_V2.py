@@ -100,13 +100,13 @@ CAMPUS_LOCATIONS = {
     },
     "red hawk diner": {
         "label": "Red Hawk Diner",
-        "coordinates": ftm.MapLatitudeLongitude(40.86203, -74.19792),
+        "coordinates": ftm.MapLatitudeLongitude(40.862998, -74.199411),
         "info": "Popular campus dining location.",
         "hours": "7:00 AM - 10:00 PM",
     },
     "school of communication and media": {
         "label": "School of Communication and Media",
-        "coordinates": ftm.MapLatitudeLongitude(40.85905, -74.19663),
+        "coordinates": ftm.MapLatitudeLongitude(40.860098, -74.197173),
         "info": "Media, communication, and production spaces.",
         "hours": "8:00 AM - 9:00 PM",
     },
