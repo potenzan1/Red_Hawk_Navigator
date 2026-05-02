@@ -119,7 +119,6 @@ DEMO_EVENTS = [
         "date": None,
         "time": "12:00:00",
         "description": "Campus celebration event.",
-        "status": "Approved",
     },
     {
         "title": "Career Fair",
@@ -127,7 +126,6 @@ DEMO_EVENTS = [
         "date": "2028-04-07",
         "time": "01:54:00",
         "description": "Meet employers and explore opportunities.",
-        "status": "Approved",
     },
     {
         "title": "Club Expo",
@@ -135,7 +133,6 @@ DEMO_EVENTS = [
         "date": "2024-04-07",
         "time": "01:54:00",
         "description": "Discover student organizations.",
-        "status": "Approved",
     },
 ]
 
@@ -206,7 +203,7 @@ def get_events():
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT eventID, title, location, date, time, description, status
+            SELECT eventID, title, location, date, time, description
             FROM event
             ORDER BY date ASC, time ASC, eventID DESC
             """
